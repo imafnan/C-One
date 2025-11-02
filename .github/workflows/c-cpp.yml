@@ -8,16 +8,57 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+
     steps:
-    - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+      # 1️⃣ Checkout repository
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      # 2️⃣ Install dependencies
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential autoconf automake libtool pkg-config \
+                                  ${{ matrix.compiler }}
+
+      # 3️⃣ Cache build outputs (optional but speeds up builds)
+      - name: Cache build directory
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache
+            build/
+          key: ${{ runner.os }}-${{ matrix.compiler }}-${{ hashFiles('**/Makefile.am') }}
+
+      # 4️⃣ Configure project
+      - name: Configure project
+        run: |
+          echo "Using compiler: ${{ matrix.compiler }}"
+          CC=${{ matrix.compiler }} ./configure
+
+      # 5️⃣ Build project
+      - name: Build
+        run: make -j$(nproc)
+
+      # 6️⃣ Run tests
+      - name: Run tests (make check)
+        run: make check
+
+      # 7️⃣ Distribution check
+      - name: Run distcheck
+        run: make distcheck
+
+      # 8️⃣ Upload artifacts (optional)
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.compiler }}
+          path: |
+            *.tar.gz
+            build/
